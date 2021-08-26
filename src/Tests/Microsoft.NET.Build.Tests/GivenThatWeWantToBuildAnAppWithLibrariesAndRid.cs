@@ -6,6 +6,7 @@ using Microsoft.DotNet.Cli.Utils;
 using Microsoft.NET.TestFramework;
 using Microsoft.NET.TestFramework.Assertions;
 using Microsoft.NET.TestFramework.Commands;
+using System;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -48,7 +49,7 @@ namespace Microsoft.NET.Build.Tests
                 .Should()
                 .Pass();
 
-            var outputDirectory = buildCommand.GetOutputDirectory("netcoreapp2.1", runtimeIdentifier: runtimeIdentifier);
+            var outputDirectory = buildCommand.GetOutputDirectory(ToolsetInfo.CurrentTargetFramework, runtimeIdentifier: runtimeIdentifier);
             var selfContainedExecutable = $"App{Constants.ExeSuffix}";
 
             string selfContainedExecutableFullPath = Path.Combine(outputDirectory.FullName, selfContainedExecutable);
@@ -91,26 +92,31 @@ namespace Microsoft.NET.Build.Tests
             var buildCommand = new BuildCommand(testAsset, "App");
 
             buildCommand
-                .Execute($"/p:RuntimeIdentifier={runtimeIdentifier}", $"/p:TestRuntimeIdentifier={runtimeIdentifier}", "/p:SelfContained=false")
+                .Execute($"/p:RuntimeIdentifier={runtimeIdentifier}", $"/p:TestRuntimeIdentifier={runtimeIdentifier}", "/p:SelfContained=false", "/p:ProduceReferenceAssembly=false")
                 .Should().Pass();
 
-            var outputDirectory = buildCommand.GetOutputDirectory("netcoreapp2.1", runtimeIdentifier: runtimeIdentifier);
+            var outputDirectory = buildCommand.GetOutputDirectory(ToolsetInfo.CurrentTargetFramework, runtimeIdentifier: runtimeIdentifier);
 
             outputDirectory.Should().NotHaveSubDirectories();
-            outputDirectory.Should().OnlyHaveFiles(new[] {
+
+            var expectedFiles = new[] {
                 $"App{Constants.ExeSuffix}",
                 "App.dll",
                 "App.pdb",
                 "App.deps.json",
                 "App.runtimeconfig.json",
-                "App.runtimeconfig.dev.json",
                 "LibraryWithoutRid.dll",
                 "LibraryWithoutRid.pdb",
                 "LibraryWithRid.dll",
                 "LibraryWithRid.pdb",
                 "LibraryWithRids.dll",
                 "LibraryWithRids.pdb",
-            });
+            };
+            if (OperatingSystem.IsWindows())
+            {
+                expectedFiles.Append("sqlite3.dll");
+            }
+            outputDirectory.Should().OnlyHaveFiles(expectedFiles);
 
             new DotnetCommand(Log, Path.Combine(outputDirectory.FullName, "App.dll"))
                 .Execute()
